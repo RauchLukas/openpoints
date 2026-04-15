@@ -44,6 +44,15 @@ class Wandb:
             wandb_args[name] = var
 
     @staticmethod
+    def _cfg_to_dict(cfg):
+        """Convert config object to a plain dict for wandb."""
+        if hasattr(cfg, "dict") and callable(cfg.dict):
+            return cfg.dict()
+        if isinstance(cfg, dict):
+            return cfg
+        return {}
+
+    @staticmethod
     def launch(cfg, launch: bool):
         if launch:
             import wandb
@@ -68,8 +77,10 @@ class Wandb:
                 commit_sha = "n/a"
                 gitdiff = ""
 
+            cfg_dict = Wandb._cfg_to_dict(cfg)
             config = wandb_args.get("config", {})
             wandb_args["config"] = {
+                **cfg_dict,
                 **config,
                 "run_path": os.getcwd(),
                 "commit": commit_sha,
