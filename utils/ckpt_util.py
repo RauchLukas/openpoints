@@ -134,7 +134,7 @@ def resume_checkpoint(config, model, optimizer=None, scheduler=None, pretrained_
     torch.cuda.empty_cache()
 
 
-def load_checkpoint(model, pretrained_path, module=None):
+def load_checkpoint(model, pretrained_path, module=None, cfg=None):
     if not os.path.exists(pretrained_path):
         raise NotImplementedError('no checkpoint file from path %s...' % pretrained_path)
     # load state dict
@@ -148,6 +148,22 @@ def load_checkpoint(model, pretrained_path, module=None):
     base_ckpt = {k.replace("module.", ""): v for k, v in ckpt_state_dict.items()}
     if module is not None:
         base_ckpt = {k:v for k, v in base_ckpt.items() if module in k}
+
+    if cfg is not None and hasattr(cfg, 'remove_layers'):
+        remove_layers = cfg.remove_layers
+
+        replacement_dict = {}
+
+        # check state dict names 
+        for key, value in base_ckpt.items():
+            # Check if any removed key is a substring of the current key
+            if any(removed_key in key for removed_key in remove_layers):
+                logging.info('Removing key %s from checkpoint' % key)
+                continue
+            replacement_dict[key] = value
+        
+        base_ckpt = replacement_dict
+
         
     if "bert" in list(ckpt_state_dict.items())[0][0]:
         base_ckpt=bert2vit_ckpt_rename(ckpt_state_dict)

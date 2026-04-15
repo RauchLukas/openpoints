@@ -84,7 +84,8 @@ def build_dataloader_from_cfg(batch_size,
                                                  drop_last=split == 'train',
                                                  sampler=sampler,
                                                  collate_fn=collate_fn, 
-                                                 pin_memory=True
+                                                 pin_memory=True, 
+                                                 persistent_workers=(int(dataloader_cfg.num_workers) > 0),
                                                  )
     else:
         dataloader = torch.utils.data.DataLoader(dataset,

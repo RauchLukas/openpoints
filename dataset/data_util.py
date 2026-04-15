@@ -8,7 +8,8 @@ import sys
 import urllib
 import h5py
 from typing import Optional
-
+from scipy.spatial import cKDTree
+from time import time
 
 class IO:
     @classmethod
@@ -126,14 +127,15 @@ def ravel_hash_vec(arr):
 
 def voxelize(coord, voxel_size=0.05, hash_type='fnv', mode=0):
     discrete_coord = np.floor(coord / np.array(voxel_size))
+    # print(f"[DEBUG] Voxelize - Num points before voxelization: {coord.shape[0]}")
     if hash_type == 'ravel':
         key = ravel_hash_vec(discrete_coord)
     else:
         key = fnv_hash_vec(discrete_coord)
-
     idx_sort = np.argsort(key)
     key_sort = key[idx_sort]
     _, voxel_idx, count = np.unique(key_sort, return_counts=True, return_inverse=True)
+
     if mode == 0:  # train mode
         idx_select = np.cumsum(np.insert(count, 0, 0)[
                                0:-1]) + np.random.randint(0, count.max(), count.size) % count
@@ -142,22 +144,114 @@ def voxelize(coord, voxel_size=0.05, hash_type='fnv', mode=0):
     else:  # val mode
         return idx_sort, voxel_idx, count
 
+def knn_scipy_ckdtree(X, Q, k):
+    from scipy.spatial import cKDTree
+    tree = cKDTree(X)
+    try:
+        _, idx = tree.query(Q, k=k, workers=-1)
+    except TypeError:
+        _, idx = tree.query(Q, k=k)
+    return idx
+
+# def crop_pc(coord, feat, label, split='train',
+#             voxel_size=0.04, voxel_max=None,
+#             downsample=True, variable=True, shuffle=True):
+#     # ensure coord, feat, label are numpy arrays
+#     coord = coord if isinstance(coord, np.ndarray) else coord.numpy()
+#     feat = feat if feat is None or isinstance(feat, np.ndarray) else feat.numpy()
+#     label = label if label is None or isinstance(label, np.ndarray) else label.numpy()
+
+#     # optional voxel downsampling
+#     if voxel_size and downsample:
+#         # This shift is often used to make coordinates positive & anchored at 0
+#         # (borrowed from Stratified/Point Transformer implementations).
+#         coord -= coord.min(0)
+#         start = time()
+#         uniq_idx = voxelize(coord, voxel_size)
+#         print(f"[DEBUG] Voxelization  time: {time() - start:.4f} seconds")
+#         coord = coord[uniq_idx]
+#         feat  = feat[uniq_idx]  if feat  is not None else None
+#         label = label[uniq_idx] if label is not None else None
+
+#     if voxel_max is not None:
+#         crop_idx = None
+#         N = coord.shape[0]  # use coord; label might be None
+
+#         if N >= voxel_max:
+#             # choose seed index
+#             init_idx = np.random.randint(N) if 'train' in split else N // 2
+
+#             # build KD-tree and query k nearest neighbours
+#             # Note: k <= N here because we are in the N >= voxel_max branch
+#             start = time()
+#             tree = cKDTree(coord)
+#             end = time()
+#             print(f"[DEBUG] KD-tree build time: {end - start:.4f} seconds")
+#             # Query single point; returns shape (k,) indices
+#             _, crop_idx = tree.query(coord[init_idx], k=voxel_max)
+#             print(f"[DEBUG] KD-tree query time: {time() - end:.4f} seconds")
+#             crop_idx = np.asarray(crop_idx).reshape(-1)
+
+#         elif not variable:
+#             # fill more points for non-variable case (batched data)
+#             cur_num_points = N
+#             query_inds = np.arange(cur_num_points)
+#             padding_choice = np.random.choice(
+#                 cur_num_points, voxel_max - cur_num_points
+#             )
+#             crop_idx = np.hstack([query_inds, query_inds[padding_choice]])
+
+#         # if still None (N < voxel_max and variable=True), keep all points
+#         if crop_idx is None:
+#             crop_idx = np.arange(coord.shape[0])
+
+#         if shuffle:
+#             shuffle_choice = np.random.permutation(len(crop_idx))
+#             crop_idx = crop_idx[shuffle_choice]
+
+#         coord = coord[crop_idx]
+#         feat  = feat[crop_idx]  if feat  is not None else None
+#         label = label[crop_idx] if label is not None else None
+
+#     # final shift to start at zero again (as in your original code)
+#     coord -= coord.min(0)
+
+#     # dtypes
+#     coord = coord.astype(np.float32)
+#     feat  = feat.astype(np.float32) if feat  is not None else None
+#     # np.long is deprecated; use np.int64 instead
+#     label = label.astype(np.int64)  if label is not None else None
+
+#     return coord, feat, label
+
 
 def crop_pc(coord, feat, label, split='train',
             voxel_size=0.04, voxel_max=None,
             downsample=True, variable=True, shuffle=True):
+    
+    # ensure coord, feat, label are numpy arrays
+    coord = coord if isinstance(coord, np.ndarray) else coord.numpy()
+    feat = feat if feat is None or isinstance(feat, np.ndarray) else feat.numpy()
+    label = label if label is None or isinstance(label, np.ndarray) else label.numpy()
+
+    # print(f"[DEBUG] Config: voxel_size={voxel_size}, voxel_max={voxel_max}, downsample={downsample}, variable={variable}, shuffle={shuffle}")
+
     if voxel_size and downsample:
         # Is this shifting a must? I borrow it from Stratified Transformer and Point Transformer. 
         coord -= coord.min(0) 
+        start = time()
         uniq_idx = voxelize(coord, voxel_size)
+        end = time()
         coord, feat, label = coord[uniq_idx], feat[uniq_idx] if feat is not None else None, label[uniq_idx] if label is not None else None
     if voxel_max is not None:
         crop_idx = None
         N = len(label)  # the number of points
         if N >= voxel_max:
             init_idx = np.random.randint(N) if 'train' in split else N // 2
+            start = time()
             crop_idx = np.argsort(
                 np.sum(np.square(coord - coord[init_idx]), 1))[:voxel_max]
+            end = time()
         elif not variable:
             # fill more points for non-variable case (batched data)
             cur_num_points = N
