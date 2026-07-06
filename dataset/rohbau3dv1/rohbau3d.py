@@ -197,7 +197,7 @@ class Rohbau3D(Dataset):
                 return np.hstack(
                     (coord, feat, np.expand_dims(label, -1))).astype(np.float32)
             
-            with ThreadPoolExecutor(max_workers=16) as executor:
+            with ThreadPoolExecutor(max_workers=64) as executor:
                 results = list(tqdm(executor.map(process_item, self.data_list), 
                                    total=len(self.data_list), 
                                    desc=f'Loading Rohbau3D {split} split'))
