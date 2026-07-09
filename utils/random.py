@@ -20,9 +20,10 @@ def set_random_seed(seed=0, deterministic=False):
         torch.backends.cudnn.benchmark = False
         if hasattr(torch, "use_deterministic_algorithms"):
             try:
+                # warn_only needs PyTorch >= 1.12; non-strict mode would crash on
+                # CrossEntropyLoss CUDA (no deterministic kernel in older builds).
                 torch.use_deterministic_algorithms(True, warn_only=True)
             except TypeError:
-                # PyTorch < 1.12 has no warn_only kwarg.
-                torch.use_deterministic_algorithms(True)
+                pass
     else:
         torch.backends.cudnn.benchmark = True
