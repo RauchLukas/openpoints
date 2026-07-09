@@ -18,12 +18,8 @@ def set_random_seed(seed=0, deterministic=False):
     if deterministic:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        if hasattr(torch, "use_deterministic_algorithms"):
-            try:
-                # warn_only needs PyTorch >= 1.12; non-strict mode would crash on
-                # CrossEntropyLoss CUDA (no deterministic kernel in older builds).
-                torch.use_deterministic_algorithms(True, warn_only=True)
-            except TypeError:
-                pass
+        # Do not call torch.use_deterministic_algorithms(): CrossEntropyLoss has no
+        # deterministic CUDA kernel on PyTorch 1.x / CUDA builds used here.
+        # cudnn deterministic + fixed seeds are sufficient for val reproducibility.
     else:
         torch.backends.cudnn.benchmark = True
