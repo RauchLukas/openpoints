@@ -18,6 +18,11 @@ def set_random_seed(seed=0, deterministic=False):
     if deterministic:
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-        torch.use_deterministic_algorithms(True, warn_only=True)
+        if hasattr(torch, "use_deterministic_algorithms"):
+            try:
+                torch.use_deterministic_algorithms(True, warn_only=True)
+            except TypeError:
+                # PyTorch < 1.12 has no warn_only kwarg.
+                torch.use_deterministic_algorithms(True)
     else:
         torch.backends.cudnn.benchmark = True
