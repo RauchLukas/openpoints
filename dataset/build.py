@@ -1,6 +1,8 @@
 """
 Author: PointNeXt
 """
+import random
+
 import numpy as np
 import torch
 from easydict import EasyDict as edict
@@ -38,7 +40,9 @@ def build_dataset_from_cfg(cfg, default_args=None):
     return DATASETS.build(cfg, default_args=default_args)
 
 def worker_init_fn(worker_id):
-    np.random.seed(np.random.get_state()[1][0] + worker_id)
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 
 def build_dataloader_from_cfg(batch_size,
@@ -47,7 +51,8 @@ def build_dataloader_from_cfg(batch_size,
                               datatransforms_cfg=None,
                               split='train',
                               distributed=True,
-                              dataset=None
+                              dataset=None,
+                              seed=None,
                               ):
     if dataset is None:
         if datatransforms_cfg is not None:
@@ -75,6 +80,11 @@ def build_dataloader_from_cfg(batch_size,
     collate_fn = eval(collate_fn) if isinstance(collate_fn, str) else collate_fn
 
     shuffle = split == 'train'
+    generator = None
+    if shuffle and seed is not None and not distributed:
+        generator = torch.Generator()
+        generator.manual_seed(int(seed))
+
     if distributed:
         sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=shuffle)
         dataloader = torch.utils.data.DataLoader(dataset,
@@ -83,9 +93,10 @@ def build_dataloader_from_cfg(batch_size,
                                                  worker_init_fn=worker_init_fn,
                                                  drop_last=split == 'train',
                                                  sampler=sampler,
-                                                 collate_fn=collate_fn, 
-                                                 pin_memory=True, 
+                                                 collate_fn=collate_fn,
+                                                 pin_memory=True,
                                                  persistent_workers=(int(dataloader_cfg.num_workers) > 0),
+                                                 generator=generator,
                                                  )
     else:
         dataloader = torch.utils.data.DataLoader(dataset,
@@ -95,5 +106,7 @@ def build_dataloader_from_cfg(batch_size,
                                                  drop_last=split == 'train',
                                                  shuffle=shuffle,
                                                  collate_fn=collate_fn,
-                                                 pin_memory=True)
+                                                 pin_memory=True,
+                                                 generator=generator,
+                                                 )
     return dataloader

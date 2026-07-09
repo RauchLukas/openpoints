@@ -227,21 +227,24 @@ def knn_scipy_ckdtree(X, Q, k):
 
 def crop_pc(coord, feat, label, split='train',
             voxel_size=0.04, voxel_max=None,
-            downsample=True, variable=True, shuffle=True):
-    
+            downsample=True, variable=True, shuffle=None):
+    if shuffle is None:
+        shuffle = 'train' in split
+
     # ensure coord, feat, label are numpy arrays
     coord = coord if isinstance(coord, np.ndarray) else coord.numpy()
     feat = feat if feat is None or isinstance(feat, np.ndarray) else feat.numpy()
     label = label if label is None or isinstance(label, np.ndarray) else label.numpy()
 
-    # print(f"[DEBUG] Config: voxel_size={voxel_size}, voxel_max={voxel_max}, downsample={downsample}, variable={variable}, shuffle={shuffle}")
-
     if voxel_size and downsample:
-        # Is this shifting a must? I borrow it from Stratified Transformer and Point Transformer. 
-        coord -= coord.min(0) 
-        start = time()
-        uniq_idx = voxelize(coord, voxel_size)
-        end = time()
+        # Is this shifting a must? I borrow it from Stratified Transformer and Point Transformer.
+        coord -= coord.min(0)
+        if 'train' in split:
+            uniq_idx = voxelize(coord, voxel_size)
+        else:
+            idx_sort, _, count = voxelize(coord, voxel_size, mode=1)
+            idx_select = np.cumsum(np.insert(count, 0, 0)[0:-1])
+            uniq_idx = idx_sort[idx_select]
         coord, feat, label = coord[uniq_idx], feat[uniq_idx] if feat is not None else None, label[uniq_idx] if label is not None else None
     if voxel_max is not None:
         crop_idx = None

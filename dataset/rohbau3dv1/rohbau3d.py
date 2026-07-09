@@ -165,13 +165,12 @@ class Rohbau3D(Dataset):
         logging.info(f"Features used for {split}: {self.features}")
 
         if split == "train" or split == 'val':
-            self.data_list = glob.glob(os.path.join(data_root, split, "site_*", 'scene_*'))
-            # self.data_list = glob.glob(os.path.join(data_root, split, 'scene_*'))   # list all scan folders. Not the files itself!
+            self.data_list = sorted(glob.glob(os.path.join(data_root, split, "site_*", 'scene_*')))
         elif split == 'trainval':
-            self.data_list = glob.glob(os.path.join(data_root, 'train', "site_*", 'scene_*')) + \
-                             glob.glob(os.path.join(data_root, 'val', "site_*", 'scene_*'))
+            self.data_list = sorted(glob.glob(os.path.join(data_root, 'train', "site_*", 'scene_*')) +
+                                    glob.glob(os.path.join(data_root, 'val', "site_*", 'scene_*')))
         elif split == 'test':
-            self.data_list = glob.glob(os.path.join(data_root, split, "site_*", 'scene_*'))
+            self.data_list = sorted(glob.glob(os.path.join(data_root, split, "site_*", 'scene_*')))
         else:
             raise ValueError("no such split: {}".format(split))
         
